@@ -1,167 +1,139 @@
-# SecureShare
+# Cloud File Storage and Sharing System
 
-SecureShare is a private file-sharing platform. Authenticated users can upload files, view their stored files, download or delete them, and create controlled share links.
+A learning and portfolio project focused on understanding secure file uploads, cloud object storage, authenticated access, and controlled file sharing.
 
-## Features
+> **Project origin:** This repository is an adaptation of [SecureShare by srikesav09](https://github.com/srikesav09/SecureShare). The upstream project provided the starting codebase. This README identifies the source clearly; any original changes made for this portfolio should be documented below as they are implemented and tested.
 
-- User registration, login, and protected profiles.
-- File upload with type/signature validation.
-- File listing, in-app preview for browser-supported files, download, and deletion.
-- Per-file header and metadata risk analysis with user-facing findings.
-- Account-scoped audit activity for uploads, previews, downloads, shares, sign-ins, and failures.
-- On-demand analysis for older files that were uploaded before security analysis was enabled.
-- Expiring or revocable share links.
-- MongoDB persistence and AWS S3 file storage.
-- Encryption, rate limiting, security headers, request IDs, CORS restrictions, and centralized errors.
-- Responsive React UI with Overview, My files, Shared links, and Settings views.
+## Overview
 
-## Technology
+The application provides a web interface for authenticated users to manage files and share them through controlled links. It uses a React client, an Express API, MongoDB for application data, and Amazon S3 for file storage.
 
-| Area       | Technology                                            |
-| ---------- | ----------------------------------------------------- |
-| Client     | React, React Router, Vite, Tailwind CSS               |
-| API        | Node.js, Express                                      |
-| Database   | MongoDB with Mongoose                                 |
-| Storage    | Amazon S3                                             |
-| Security   | Zod, Helmet, CORS, rate limiting, Multer              |
-| Testing    | Node.js test runner, Supertest, MongoDB Memory Server |
-| Deployment | GitHub Actions, Vercel, AWS EC2                       |
+## Current Codebase Features
 
-## Project structure
+- Account registration and login
+- Protected file-management routes
+- File upload, listing, download, preview, and deletion
+- File-type and signature validation
+- Expiring or revocable file-sharing links
+- Audit activity for selected account and file actions
+- Security middleware, request validation, rate limiting, and centralized error handling
+- Responsive React interface
+
+These describe capabilities present in the inherited codebase; they should not be interpreted as features independently implemented by this repository's owner.
+
+## Technology Stack
+
+| Layer | Technologies |
+| --- | --- |
+| Frontend | React, React Router, Vite |
+| Backend | Node.js, Express |
+| Database | MongoDB, Mongoose |
+| Object storage | Amazon S3 |
+| Validation and security | Zod, Helmet, CORS, rate limiting, Multer |
+| Testing | Node.js test runner, Supertest, MongoDB Memory Server |
+| Deployment tooling | GitHub Actions, Vercel, AWS EC2 |
+
+## Repository Structure
 
 ```text
-SecureShare/
-├── client/                 # React/Vite web application
-│   ├── public/              # Static assets and application icons
-│   └── src/                 # Components, pages, routes, and API services
-├── server/                 # Express API
-│   ├── src/                 # Controllers, middleware, models, routes, and services
-│   └── test/                # API and security tests
-├── docs/                   # Architecture, API, deployment, and security documentation
-├── postman/                # Postman collections and environments
-└── .github/workflows/      # CI/CD workflows
+.
+├── client/       # React/Vite frontend
+├── server/       # Express API, routes, services, and models
+├── docs/         # Architecture, API, security, and deployment notes
+├── .github/      # Workflow configuration
+├── README.md
+├── LICENSE.md
+└── SECURITY.md
 ```
 
-## Requirements
+## Prerequisites
 
-- Node.js 22 or newer.
-- npm.
-- MongoDB connection string.
-- AWS S3 bucket and credentials for the server.
+- Node.js 22 or newer
+- npm
+- A MongoDB database or connection string
+- An AWS S3 bucket and appropriately scoped credentials for S3-backed file operations
 
-## Local setup
+## Local Setup
 
-```powershell
-git clone <your-repository-url>
-cd SecureShare
+Clone **this repository**:
 
+```bash
+git clone https://github.com/aarzusharma07/cloud-file-storage-system.git
+cd cloud-file-storage-system
+```
+
+Install the backend dependencies:
+
+```bash
 cd server
-npm ci
-
-cd ..\client
 npm ci
 ```
 
-Create `server/.env` from [`server/.env.example`](server/.env.example) and set the required values. Never commit `.env` files, secrets, AWS credentials, or uploaded files.
+Install the frontend dependencies in a separate terminal or after returning to the repository root:
 
-Start the API:
+```bash
+cd ../client
+npm ci
+```
 
-```powershell
-cd server
+Create `server/.env` from `server/.env.example` and fill in the required values for your own development environment. Do not commit real credentials or secret values.
+
+Start the API from the `server` directory:
+
+```bash
 npm run dev
 ```
 
-The API runs on `http://localhost:5000` by default. In a second terminal, start the client:
+Start the frontend from the `client` directory in another terminal:
 
-```powershell
-cd client
+```bash
 npm run dev
 ```
 
-Vite normally serves the client at `http://localhost:5173`. If that port is busy, use the alternate URL printed in the terminal.
+The API defaults to `http://localhost:5000` and Vite normally serves the frontend at `http://localhost:5173`. Check the terminal output and project configuration if your local ports differ.
 
-To override the API URL, create `client/.env`:
+If needed, configure `VITE_API_URL` in a local client environment file to point to your own API. Keep environment files containing secrets out of version control.
 
-```env
-VITE_API_URL=http://localhost:5000
-```
+## Configuration and Security Notes
 
-The client removes a trailing `/api` automatically, so either `http://localhost:5000` or `http://localhost:5000/api` works.
+- Use your own MongoDB database and AWS S3 bucket.
+- Apply least-privilege permissions to AWS credentials.
+- Keep secrets in local environment files or a deployment platform's secret manager.
+- Never commit access keys, JWT secrets, database passwords, private user files, or production environment files.
+- File-security checks provide indicators, not a guarantee that a file is safe.
+- Review the configuration and security documentation before deploying this project publicly.
 
-## API overview
+## Testing and Quality Checks
 
-The local API base is `http://localhost:5000/api`. Production uses `https://api.srikesav.site/api`.
-The production web app is served by Vercel at `https://secure-share-lime.vercel.app`.
+Run commands from the relevant package directory.
 
-| Method | Endpoint                  | Purpose                       | Access        |
-| ------ | ------------------------- | ----------------------------- | ------------- |
-| GET    | `/api/health`             | Check API availability        | Public        |
-| POST   | `/api/auth/register`      | Create an account             | Public        |
-| POST   | `/api/auth/login`         | Sign in and receive a token   | Public        |
-| GET    | `/api/auth/profile`       | Read the current profile      | Authenticated |
-| POST   | `/api/files/upload`       | Upload one file               | Authenticated |
-| GET    | `/api/files`              | List the current user’s files | Authenticated |
-| GET    | `/api/files/:id/download` | Download a file               | Authenticated |
-| GET    | `/api/audit-logs`         | Read account and share activity | Authenticated |
-| POST   | `/api/files/:id/security-analysis` | Analyze an existing file | Authenticated |
-| DELETE | `/api/files/:id`          | Delete a file                 | Authenticated |
-| POST   | `/api/share/:fileId`      | Create a share link           | Authenticated |
-| DELETE | `/api/share/:shareId`     | Revoke a share link           | Authenticated |
-| GET    | `/share/:token`           | Access a shared file          | Share token   |
+Frontend:
 
-Protected requests use `Authorization: Bearer <jwt-token>`.
-
-More detail is available in [`docs/`](docs/), especially [`docs/api/api-specification.md`](docs/api/api-specification.md).
-
-## Security analysis and audit activity
-
-Every upload is checked before encryption using extension validation, file signatures, and advisory
-header heuristics. The analysis looks for executable headers, suspicious double extensions, active
-content patterns, and risky PDF actions. A warning does not prove that a file is malicious, and a
-clean result is not a guarantee that a file is safe; users should still use endpoint antivirus and
-avoid opening untrusted files.
-
-The Audit activity view is limited to the signed-in user’s own events plus anonymous access events
-for links they own. It records the action, result, timestamp, file or link, IP address, and browser
-signature. Secrets, passwords, and share tokens are redacted or never stored in audit details.
-
-## Quality checks
-
-```powershell
-cd client
+```bash
 npm run format:check
 npm run lint
 npm run build
+```
 
-cd ..\server
+Backend:
+
+```bash
 npm run format:check
 npm test
 ```
 
-Use `npm run format` in either package to format its source files. S3-dependent server tests require compatible test credentials or an S3 mock/LocalStack instance; missing credentials can cause upload tests to fail.
+Some integration tests may require test database configuration or S3-compatible test infrastructure. Review the test setup and error output before interpreting a test failure.
 
 ## Deployment
 
-Pushing to `main` starts [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml), which:
+Deployment is **not claimed as complete by this README**. To deploy your own instance, follow the documentation in `docs/deployment/`, configure your own infrastructure and secrets, and verify the frontend, API, database, and S3 integration end to end. Remove any upstream environment references from deployment configuration before using it.
 
-1. Installs server dependencies and runs tests.
-2. Builds the client. Vercel deploys the client automatically from the connected GitHub repository.
-3. Pulls the repository on EC2, rebuilds the client, installs production server dependencies, and restarts PM2.
-4. Checks `https://api.srikesav.site/api/health`.
+## Portfolio Work and Contributions
 
-Production URLs:
+This repository is being used to study and adapt a cloud file-storage application. Add a dated entry here for each change you personally make and test—for example, a new feature, a security improvement, a deployment you configured, or tests you added. Do not list planned work as completed work.
 
-- Client: [https://secure-share-lime.vercel.app](https://secure-share-lime.vercel.app)
-- API health: [https://api.srikesav.site/api/health](https://api.srikesav.site/api/health)
+## Attribution and License
 
-Set `FRONTEND_URL` on the EC2 server to the Vercel production URL (and any comma-separated custom frontend domains) so browser API requests and file downloads pass CORS validation.
-
-Keep deployment credentials in GitHub Secrets. The workflow uses the AWS credentials and region needed for EC2 Systems Manager deployment. Vercel uses its native GitHub integration for the frontend. See [`docs/deployment/deployment-guide.md`](docs/deployment/deployment-guide.md).
-
-## Security and contributing
-
-Read [`SECURITY.md`](SECURITY.md) for reporting guidance and [`docs/security/`](docs/security/) for the security design. See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the development checklist.
-
-## License
-
-See [`LICENSE.md`](LICENSE.md).
+- **Upstream project:** [SecureShare by srikesav09](https://github.com/srikesav09/SecureShare)
+- Review the included `LICENSE.md` and preserve its required copyright and license notices.
+- Changes made in this repository should be documented separately from the upstream implementation.
