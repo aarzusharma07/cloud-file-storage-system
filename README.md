@@ -90,24 +90,23 @@ The client removes a trailing `/api` automatically, so either `http://localhost:
 
 ## API overview
 
-The local API base is `http://localhost:5000/api`. Production uses `https://api.srikesav.site/api`.
-The production web app is served by Vercel at `https://secure-share-lime.vercel.app`.
+The local API base is `http://localhost:5000/api`. After deploying your own instance, use your configured production API URL.
 
-| Method | Endpoint                  | Purpose                       | Access        |
-| ------ | ------------------------- | ----------------------------- | ------------- |
-| GET    | `/api/health`             | Check API availability        | Public        |
-| POST   | `/api/auth/register`      | Create an account             | Public        |
-| POST   | `/api/auth/login`         | Sign in and receive a token   | Public        |
-| GET    | `/api/auth/profile`       | Read the current profile      | Authenticated |
-| POST   | `/api/files/upload`       | Upload one file               | Authenticated |
-| GET    | `/api/files`              | List the current user’s files | Authenticated |
-| GET    | `/api/files/:id/download` | Download a file               | Authenticated |
-| GET    | `/api/audit-logs`         | Read account and share activity | Authenticated |
-| POST   | `/api/files/:id/security-analysis` | Analyze an existing file | Authenticated |
-| DELETE | `/api/files/:id`          | Delete a file                 | Authenticated |
-| POST   | `/api/share/:fileId`      | Create a share link           | Authenticated |
-| DELETE | `/api/share/:shareId`     | Revoke a share link           | Authenticated |
-| GET    | `/share/:token`           | Access a shared file          | Share token   |
+| Method | Endpoint                              | Purpose                          | Access        |
+| ------ | ------------------------------------- | -------------------------------- | ------------- |
+| GET    | `/api/health`                         | Check API availability           | Public        |
+| POST   | `/api/auth/register`                  | Create an account                | Public        |
+| POST   | `/api/auth/login`                     | Sign in and receive a token      | Public        |
+| GET    | `/api/auth/profile`                   | Read the current profile         | Authenticated |
+| POST   | `/api/files/upload`                   | Upload one file                  | Authenticated |
+| GET    | `/api/files`                          | List the current user’s files    | Authenticated |
+| GET    | `/api/files/:id/download`             | Download a file                  | Authenticated |
+| GET    | `/api/audit-logs`                     | Read account and share activity  | Authenticated |
+| POST   | `/api/files/:id/security-analysis`    | Analyze an existing file         | Authenticated |
+| DELETE | `/api/files/:id`                      | Delete a file                    | Authenticated |
+| POST   | `/api/share/:fileId`                  | Create a share link              | Authenticated |
+| DELETE | `/api/share/:shareId`                 | Revoke a share link              | Authenticated |
+| GET    | `/share/:token`                       | Access a shared file             | Share token   |
 
 Protected requests use `Authorization: Bearer <jwt-token>`.
 
@@ -115,15 +114,9 @@ More detail is available in [`docs/`](docs/), especially [`docs/api/api-specific
 
 ## Security analysis and audit activity
 
-Every upload is checked before encryption using extension validation, file signatures, and advisory
-header heuristics. The analysis looks for executable headers, suspicious double extensions, active
-content patterns, and risky PDF actions. A warning does not prove that a file is malicious, and a
-clean result is not a guarantee that a file is safe; users should still use endpoint antivirus and
-avoid opening untrusted files.
+Every upload is checked before encryption using extension validation, file signatures, and advisory header heuristics. The analysis looks for executable headers, suspicious double extensions, active content patterns, and risky PDF actions. A warning does not prove that a file is malicious, and a clean result is not a guarantee that a file is safe; users should still use endpoint antivirus and avoid opening untrusted files.
 
-The Audit activity view is limited to the signed-in user’s own events plus anonymous access events
-for links they own. It records the action, result, timestamp, file or link, IP address, and browser
-signature. Secrets, passwords, and share tokens are redacted or never stored in audit details.
+The Audit activity view is limited to the signed-in user’s own events plus anonymous access events for links they own. It records the action, result, timestamp, file or link, IP address, and browser signature. Secrets, passwords, and share tokens are redacted or never stored in audit details.
 
 ## Quality checks
 
@@ -145,16 +138,11 @@ Use `npm run format` in either package to format its source files. S3-dependent 
 Pushing to `main` starts [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml), which:
 
 1. Installs server dependencies and runs tests.
-2. Builds the client. Vercel deploys the client automatically from the connected GitHub repository.
+2. Builds the client. Vercel can deploy the client automatically from the connected GitHub repository.
 3. Pulls the repository on EC2, rebuilds the client, installs production server dependencies, and restarts PM2.
-4. Checks `https://api.srikesav.site/api/health`.
+4. Checks the API health endpoint configured for your deployment.
 
-Production URLs:
-
-- Client: [https://secure-share-lime.vercel.app](https://secure-share-lime.vercel.app)
-- API health: [https://api.srikesav.site/api/health](https://api.srikesav.site/api/health)
-
-Set `FRONTEND_URL` on the EC2 server to the Vercel production URL (and any comma-separated custom frontend domains) so browser API requests and file downloads pass CORS validation.
+Configure your own frontend and API URLs in the deployment environment. Set `FRONTEND_URL` on the server to your deployed frontend URL (and any comma-separated custom frontend domains) so browser API requests and file downloads pass CORS validation.
 
 Keep deployment credentials in GitHub Secrets. The workflow uses the AWS credentials and region needed for EC2 Systems Manager deployment. Vercel uses its native GitHub integration for the frontend. See [`docs/deployment/deployment-guide.md`](docs/deployment/deployment-guide.md).
 
