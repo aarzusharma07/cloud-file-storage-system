@@ -1,0 +1,35 @@
+# Node
+node_modules/
+**/.npm-cache/
+
+# Environment Variables
+.env
+.env.*
+!.env.example
+
+# Logs
+logs
+*.log
+
+# OS Files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/
+.idea/
+
+# Build
+dist/
+build/
+
+# Coverage
+coverage/
+
+# Misc
+*.local
+
+.postman/
+
+*.test.js

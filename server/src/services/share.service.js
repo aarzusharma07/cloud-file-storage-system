@@ -1,0 +1,262 @@
+import crypto from 'crypto';
+import bcrypt from 'bcrypt';
+import mongoose from 'mongoose';
+
+import Share from '../models/share.model.js';
+import File from '../models/file.model.js';
+import AppError from '../utils/AppError.js';
+import { generateHashFromBuffer, decryptBuffer } from './encryption.service.js';
+import { createAuditLog } from './audit.service.js';
+import { AUDIT_ACTIONS, AUDIT_STATUS, RESOURCE_TYPES } from '../utils/constants.js';
+import { downloadFromS3 } from './s3.service.js';
+
+export const createShareLink = async (
+  req,
+  fileId,
+  userId,
+  maxDownloads = null,
+  password = null,
+  expiresInHours = 24,
+) => {
+  if (password !== null && password !== undefined && typeof password !== 'string') {
+    throw new AppError('Password must be a string', 400);
+  }
+
+  if (password !== null && password !== undefined && password.length < 8) {
+    throw new AppError('Password must contain at least 8 characters', 400);
+  }
+
+  if (maxDownloads !== null && (!Number.isInteger(maxDownloads) || maxDownloads < 1)) {
+    throw new AppError('maxDownloads must be a positive integer', 400);
+  }
+
+  if (!Number.isInteger(expiresInHours) || expiresInHours < 1 || expiresInHours > 168) {
+    throw new AppError('Share expiry must be between 1 and 168 hours', 400);
+  }
+
+  if (!mongoose.Types.ObjectId.isValid(fileId)) {
+    throw new AppError('Invalid file ID', 400);
+  }
+
+  const file = await File.findById(fileId);
+
+  if (!file) {
+    throw new AppError('File not found', 404);
+  }
+
+  if (file.owner.toString() !== userId.toString()) {
+    throw new AppError('Access denied', 403);
+  }
+  const token = crypto.randomBytes(32).toString('hex');
+
+  const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
+
+  const expiresAt = new Date(Date.now() + expiresInHours * 60 * 60 * 1000);
+
+  let passwordHash = null;
+
+  if (password) {
+    passwordHash = await bcrypt.hash(password, 12);
+  }
+
+  const share = await Share.create({
+    file: file._id,
+    owner: userId,
+    token: hashedToken,
+    expiresAt,
+    maxDownloads,
+    passwordHash,
+  });
+
+  await createAuditLog({
+    req,
+    user: userId,
+    action: AUDIT_ACTIONS.CREATE_SHARE,
+    resourceType: RESOURCE_TYPES.SHARE,
+    resourceId: share._id,
+    status: AUDIT_STATUS.SUCCESS,
+    details: {
+      filename: file.originalName,
+    },
+  });
+
+  return {
+    success: true,
+    shareId: share._id,
+    shareLink: `${process.env.APP_URL}/share/${token}`,
+    expiresAt,
+  };
+};
+
+export const downloadSharedFileService = async (req, token) => {
+  const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
+
+  const share = await Share.findOne({ token: hashedToken });
+
+  if (!share) {
+    await createAuditLog({
+      req,
+      action: AUDIT_ACTIONS.INVALID_SHARE,
+      status: AUDIT_STATUS.FAILED,
+      details: { token },
+    });
+    throw new AppError('Invalid share link', 404);
+  }
+
+  if (share.isRevoked) {
+    throw new AppError('Share link revoked', 403);
+  }
+
+  await createAuditLog({
+    req,
+    user: null,
+    action: AUDIT_ACTIONS.OPEN_SHARE,
+    resourceType: RESOURCE_TYPES.SHARE,
+    resourceId: share._id,
+    status: AUDIT_STATUS.SUCCESS,
+    details: {
+      filename:
+        (await File.findById(share.file).select('originalName').lean())?.originalName || null,
+      ownerId: share.owner.toString(),
+    },
+  });
+
+  if (share.expiresAt < new Date()) {
+    await createAuditLog({
+      req,
+      action: AUDIT_ACTIONS.INVALID_SHARE,
+      status: AUDIT_STATUS.FAILED,
+      details: { token },
+    });
+    throw new AppError('Share link expired', 410);
+  }
+
+  const password = req.headers['x-share-password'];
+  if (share.passwordHash) {
+    if (!password) {
+      await createAuditLog({
+        req,
+        user: null,
+        action: AUDIT_ACTIONS.PASSWORD_FAILED,
+        resourceType: RESOURCE_TYPES.SHARE,
+        resourceId: share._id,
+        status: AUDIT_STATUS.FAILED,
+        details: { reason: 'Password required' },
+      });
+      throw new AppError('Share password required', 401);
+    }
+
+    const passwordValid = await bcrypt.compare(password, share.passwordHash);
+    if (!passwordValid) {
+      await createAuditLog({
+        req,
+        user: null,
+        action: AUDIT_ACTIONS.PASSWORD_FAILED,
+        resourceType: RESOURCE_TYPES.SHARE,
+        resourceId: share._id,
+        status: AUDIT_STATUS.FAILED,
+        details: { reason: 'Invalid password' },
+      });
+      throw new AppError('Invalid share password', 403);
+    }
+  }
+
+  const updatedShare = await Share.findOneAndUpdate(
+    {
+      _id: share._id,
+      $or: [{ maxDownloads: null }, { $expr: { $lt: ['$downloadCount', '$maxDownloads'] } }],
+    },
+    { $inc: { downloadCount: 1 } },
+    { returnDocument: 'after' },
+  );
+
+  if (!updatedShare) {
+    throw new AppError('Download limit exceeded', 403);
+  }
+
+  const file = await File.findById(share.file);
+  if (!file) {
+    throw new AppError('File not found', 404);
+  }
+
+  const encryptedBuffer = await downloadFromS3(file.s3Key);
+
+  const buffer = decryptBuffer(encryptedBuffer, file.iv);
+  const hash = generateHashFromBuffer(buffer);
+
+  if (hash !== file.hash) {
+    throw new AppError('Integrity check failed', 500);
+  }
+
+  await createAuditLog({
+    req,
+    user: null,
+    action: AUDIT_ACTIONS.DOWNLOAD_SHARE,
+    resourceType: RESOURCE_TYPES.SHARE,
+    resourceId: share._id,
+    status: AUDIT_STATUS.SUCCESS,
+    details: { filename: file.originalName, ownerId: share.owner.toString() },
+  });
+
+  return {
+    metadata: file,
+    buffer,
+  };
+};
+
+export const revokeShareLink = async (req, shareId, userId) => {
+  if (!userId) {
+    throw new AppError('User not authenticated', 401);
+  }
+
+  if (!mongoose.Types.ObjectId.isValid(shareId)) {
+    throw new AppError('Invalid share ID', 400);
+  }
+
+  const share = await Share.findById(shareId);
+
+  if (!share) {
+    throw new AppError('Share link not found', 404);
+  }
+
+  if (!share.owner) {
+    throw new AppError('Share owner missing', 500);
+  }
+
+  if (String(share.owner) !== String(userId)) {
+    await createAuditLog({
+      req,
+      user: userId,
+      action: AUDIT_ACTIONS.REVOKE_SHARE,
+      resourceType: RESOURCE_TYPES.SHARE,
+      resourceId: share._id,
+      status: AUDIT_STATUS.FAILED,
+      details: { reason: 'Access denied' },
+    });
+    throw new AppError('Access denied', 403);
+  }
+
+  const updatedShare = await Share.findOneAndUpdate(
+    { _id: shareId, isRevoked: false },
+    { $set: { isRevoked: true } },
+    { new: true },
+  );
+
+  if (!updatedShare) {
+    throw new AppError('Share link already revoked', 400);
+  }
+
+  await createAuditLog({
+    req,
+    user: userId,
+    action: AUDIT_ACTIONS.REVOKE_SHARE,
+    resourceType: RESOURCE_TYPES.SHARE,
+    resourceId: share._id,
+    status: AUDIT_STATUS.SUCCESS,
+  });
+
+  return {
+    success: true,
+    message: 'Share link revoked successfully',
+  };
+};
