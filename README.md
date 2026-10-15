@@ -146,10 +146,3 @@ Configure your own frontend and API URLs in the deployment environment. Set `FRO
 
 Keep deployment credentials in GitHub Secrets. The workflow uses the AWS credentials and region needed for EC2 Systems Manager deployment. Vercel uses its native GitHub integration for the frontend. See [`docs/deployment/deployment-guide.md`](docs/deployment/deployment-guide.md).
 
-## Security and contributing
-
-Read [`SECURITY.md`](SECURITY.md) for reporting guidance and [`docs/security/`](docs/security/) for the security design. See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the development checklist.
-
-## License
-
-See [`LICENSE.md`](LICENSE.md).
